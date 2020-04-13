@@ -1,0 +1,22 @@
+{
+    "credentials": {
+        "username": "",
+        "loginCode": "",
+        "password": "",
+        "email": "",
+        "discordToken": ""
+    },
+    "endpoints": {
+        "host": "https://m.brettspielwelt.de",
+        "baseApiPath": "/api",
+        "login": "?get=login&name={username}&loginCode={loginCode}&manual=true",
+        "user" : {
+            "getId": "?d0&get=suggest&typ=1&input={username}",
+            "getGameStats": "?d0&list=tables.UserRatingRowsFiltered&get=list&uid={userId}&filter=all&count=100&from=2"
+        },
+        "game" : {
+            "getId": ""      
+        }
+    },
+    "dataPath": "./data.json"
+}
