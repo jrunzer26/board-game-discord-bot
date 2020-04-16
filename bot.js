@@ -44,11 +44,11 @@ const commands = {
         }, 
         getUsers: {
             value: `${baseCommands.get} users`,
-            description: 'Gets the users with their status, xp and level. **** NOT IMPLEMENTED ****'
+            description: 'Gets the users with their status, xp and level.'
         }, 
-        getStats: {
-            value: `${baseCommands.get} user-stats`,
-            description: "Gets a specific user's stats. **** NOT IMPLEMENTED ****",
+        getUser: {
+            value: `${baseCommands.get} user`,
+            description: "Gets a specific user. ** Missing total games played, total games one, etc **",
             args: "{username}"
         }
     },
@@ -85,6 +85,10 @@ client.on('message', async msg => {
             await addUserToList(msg);
         else if (msg.content.substring(0, commands.users.removeUser.value.length) == commands.users.removeUser.value)
             await removeUserFromList(msg);
+        else if (msg.content.substring(0, commands.users.getUsers.value.length) == commands.users.getUsers.value)
+            await getUsers(msg);
+        else if (msg.content.substring(0, commands.users.getUser.value.length) == commands.users.getUser.value)
+            await getUserStats(msg, msg.content.substring(commands.users.getUser.value.length + 1));
         // help
         else if (msg.content === '/help')
             await sendHelp(msg);
@@ -115,7 +119,6 @@ async function getGameWins(msg) {
         };
         var tempMap = {};
         await Promise.all(games.map(async game => {
-            console.log(game.name);
             tableData.heading.push(game.name);
             await Promise.all(data.users.list.map(user => {
                 if (tempMap[user.username] == undefined) {
@@ -125,7 +128,6 @@ async function getGameWins(msg) {
                 if (data.userData[user.username] == undefined || 
                     data.userData[user.username].games == undefined ||
                     data.userData[user.username].games[game.id] == undefined) {
-                        console.log('no data');
                         tempMap[user.username].push(null);
                         
                 } else {
@@ -197,10 +199,10 @@ async function addUserToList(msg) {
     }
     if ((await checkIfUserExists(username))) {
         var response  = `${username} already exists`;
-        console.log(response);
         msg.reply(response);
         return;
     }
+    await login();
     console.log(`Adding new user to the list: ${username}`);
     var user = await getUserId(username);
     data.users.list.push({
@@ -240,6 +242,88 @@ async function removeUserFromList(msg) {
     msg.reply(response);   
     await saveData();
 }
+
+async function getUserStats(msg, username) {
+    if (username.length < 1) {
+        throw `Must specify username in command: ${commands.users.getUser.value} {username}`;
+    }
+    if (data.userData[username] == undefined) {
+        data.userData[username] = {};
+    }
+    if (data.userData[username].stats == undefined) {
+        data.userData[username].stats = {
+            modified: Date.now() - ONE_HOUR,
+            info: {},
+            userStatsTable: {}
+        }
+    }
+    if (checkIfUpdateIsRequired(data.userData[username].stats.modified)) {
+        if (msg != null) await login();
+        var userInfo = await getUserInfo(username);
+        var userStatus = await getUserId(username);
+        data.userData[username].stats.info = {
+            level: userInfo.header.level,
+            xp: userInfo.header.rechte,
+            levelProgress: userInfo.header.level_progress,
+            lastAction: userInfo.header.lastAction,
+            status: userStatus.status
+        };
+        data.userData[username].stats.modified = Date.now();
+        var info = data.userData[username].stats.info;
+        var tableData = {
+            title: `${username} Stats`,
+            heading: [ 'Level', 'Xp', 'Progress', "Last Action", "Status" ],
+            rows: [ [info.level, info.xp, info.levelProgress, info.lastAction, info.status ] ]
+        };
+        data.userData[username].stats.userStatsTable = tableData;
+        if (msg != null) await saveData();
+    }
+    if (msg != undefined) {
+        msg.reply(formatMsg(AsciiTable.factory(data.userData[username].stats.userStatsTable)));
+    }
+}
+
+async function getUsers(msg) {
+    if (checkIfUpdateIsRequired(data.stats.users.modified)) {
+        await login();
+        await Promise.all(data.users.list.map(async user => {
+            await getUserStats(null, user.username);
+        }));
+        var tableData = {
+            title: `User Stats`,
+            heading: [ 'Rank', 'Username', 'Level', 'Xp', 'Progress', "Last Action", "Status" ],
+            rows: []
+        };
+        var sortedUsers = data.users.list.sort(function(user1, user2) {
+            var user1Xp = data.userData[user1.username].stats.info.xp;
+            var user2Xp = data.userData[user2.username].stats.info.xp;
+            console.log(user1Xp + " " + user2Xp );
+            var compareVal = 0;
+            if (user1Xp > user2Xp) 
+                compareVal = 1;
+            else if (user1Xp < user2Xp ) 
+                compareVal = -1;
+            return -compareVal;
+        });
+        var rank = 1;
+        await Promise.all(sortedUsers.map(user => {
+            var row = [ rank++, user.username ];
+            console.log(data.userData[user.username].stats.userStatsTable.rows[0]);
+            row.push.apply(row, data.userData[user.username].stats.userStatsTable.rows[0]);
+            console.log(row);
+            tableData.rows.push(row);
+        }));
+        data.stats.users.data = tableData;
+        data.stats.users.modified = Date.now();
+        await saveData();
+    }
+    console.log(formatMsg(AsciiTable.factory(data.stats.users.data)));
+    if (msg != undefined) {
+        msg.reply(formatMsg(AsciiTable.factory(data.stats.users.data)));
+    }
+
+}
+
 //#endregion
 
 //#region help
@@ -269,12 +353,11 @@ async function sendHelp(msg) {
 
 async function updateAllUsersGameStats() {
     await Promise.all(data.users.list.map(async (user) => {
-        if (data.userData[user.username] != undefined) {
-            if (!checkIfUpdateIsRequired(data.userData[user.username].modified)) {
+        if (data.userData[user.username] != undefined && data.userData[user.username].games != undefined && data.userData[user.username].games.modified != undefined) {
+            if (!checkIfUpdateIsRequired(data.userData[user.username].games.modified)) {
                 return;
             }
         }
-        console.log(`updating game data for user ${user.username}`);
         var gameStats = await getGameStats(user);
         data.userData[user.username] = {
             modified: Date.now(),
@@ -298,7 +381,7 @@ async function login() {
         .replace('{username}', settings.credentials.username)
         .replace('{loginCode}', settings.credentials.loginCode)
     );
-    console.log(`Logging in. Sending request to ${url}`);
+    console.log('Logging in');
     var response = await request({ 
         uri: url,
         json: true
@@ -356,12 +439,39 @@ async function getUserId(username) {
             console.log(response);
         }
     }));
-    console.log('response from get user id: ' + response);
     if (!exists) {
         throw `Error getting user ${username}`;
     }
     return response;
 }
+
+async function getUserInfo(username) {
+    var url = buildUrl(
+        settings.endpoints.user.getUserInfo
+        .replace('{username}', username)
+    );
+    console.log(`Getting user id for user ${username}. Sending request to ${url}`);
+    var response = await request({ 
+        uri: url,
+        json: true
+    });
+    // check if error
+    if (response == undefined || response.status != 'OK') {
+        var error = `Unable to find user id for user ${username}`;
+        console.log(error);
+        console.log(response);
+        throw error;
+    }
+    if (response.data == undefined) {
+        console.log(response);
+        throw 'Error getting user info';
+    }  
+    var response = JSON.parse(response.data);
+    console.log('response from get user id: ' + response);
+    return response;
+}
+
+
 
 async function checkIfUserExists(username) {
     var exists = false;
@@ -409,6 +519,9 @@ async function init() {
                 modified : now
             },
             games : {
+                modified: now
+            },
+            users: {
                 modified: now
             }
         };
