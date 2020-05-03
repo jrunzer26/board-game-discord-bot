@@ -2,12 +2,13 @@ const request = require("request-promise").defaults({jar: true});
 const settings = require("./settings.json");
 const fs = require('fs');
 const AsciiTable = require('ascii-table');
-const ONE_HOUR = 60 * 60 * 1000;
+const TEN_MINUTES = 60 * 10 * 1000;
 const baseCommands = {
     get: '/get',
     add: '/add',
     remove: '/remove',
-    help: '/help'
+    help: '/help',
+    refresh: '/refresh'
 };
 const commands = {
     games: {
@@ -57,6 +58,12 @@ const commands = {
             value: baseCommands.help,
             description: 'Get the list of commands and descriptions.'
         }
+    },
+    admin: {
+        refresh: {
+            value: baseCommands.refresh,
+            description: 'Delete all user/game stats.'
+        }
     }
 }
 var data;   
@@ -80,6 +87,10 @@ client.on('message', async msg => {
         // games
         if (msg.content === commands.games.getWins.value)
             await getGameWins(msg);
+        else if (msg.content.substring(0, commands.games.addGame.value.length) == commands.games.addGame.value)
+            await addGame(msg, msg.content.substring(commands.users.addGame.value.length + 1));
+        else if (msg.content.substring(0, commands.games.removeGame.value.length) == commands.games.removeGame.value)
+            await removeGame(msg, msg.content.substring(commands.users.removeGame.value.length + 1));
         // users
         else if (msg.content.substring(0, commands.users.addUser.value.length) == commands.users.addUser.value)
             await addUserToList(msg);
@@ -92,6 +103,9 @@ client.on('message', async msg => {
         // help
         else if (msg.content === '/help')
             await sendHelp(msg);
+        // refresh
+        else if (msg.content === commands.admin.refresh.value)
+            await refresh(msg);
     }
     catch(err) {
         var error = `Error: ` + err; 
@@ -150,9 +164,9 @@ async function getGameWins(msg) {
             if (user1.totalWins > user2.totalWins) {
                 result = 1;
             } else if (user1.totalWins == user2.totalWins) {
-                if (user1.totalGamesPlayed < user2.totalGamesPlayed) {
+                if (user1.totalGamesPlayed > user2.totalGamesPlayed) {
                     result = 1;
-                } else if (user1.totalGamesPlayed > user2.totalGamesPlayed) {
+                } else if (user1.totalGamesPlayed < user2.totalGamesPlayed) {
                     result = -1;
                 } else {
                     result = 0;
@@ -252,7 +266,7 @@ async function getUserStats(msg, username) {
     }
     if (data.userData[username].stats == undefined) {
         data.userData[username].stats = {
-            modified: Date.now() - ONE_HOUR,
+            modified: Date.now() - TEN_MINUTES,
             info: {},
             userStatsTable: {}
         }
@@ -346,6 +360,18 @@ async function sendHelp(msg) {
 }
 //#endregion
 
+//#region refresh
+async function refresh(msg) {
+    if (msg == undefined) return;
+    var response = "\nDeleted all stats.";
+    data.userData = undefined;
+    data.stats = undefined;
+    await init();
+    await saveData();
+    msg.reply(response);
+}
+//#endregion
+
 //#endregion public
 
 
@@ -372,7 +398,7 @@ async function updateAllUsersGameStats() {
 function checkIfUpdateIsRequired(modified) {
     var now = new Date(Date.now());
     var date1 = new Date(modified);
-    return now - date1 >= ONE_HOUR;
+    return now - date1 >= TEN_MINUTES;
 }
 
 async function login() {
@@ -496,7 +522,7 @@ async function saveData() {
 
 async function init() {
     console.log('init');
-    var now = Date.now() - ONE_HOUR;
+    var now = Date.now() - TEN_MINUTES;
     if (fs.existsSync(settings.dataPath)) {
         data = require(settings.dataPath);
     }
@@ -505,6 +531,12 @@ async function init() {
     }
     if (data.users == undefined) {
         data.users = {
+            modified : now,
+            map: {}
+        }
+    }
+    if (data.games == undefined) {
+        data.games = {
             modified : now,
             list : []
         }
