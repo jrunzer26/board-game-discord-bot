@@ -72,6 +72,7 @@ const Discord = require('discord.js');
 const client = new Discord.Client();
 
 init();
+//getGame('Carcassonne');
 
 client.login(settings.credentials.discordToken);
 
@@ -83,6 +84,8 @@ client.on('message', async msg => {
     if (!(msg.content.charAt(0) === '/'))
         return;
     msg.content = msg.content.trim();
+    console.log(msg.content);
+    console.log(commands.admin.refresh.value);
     try {
         // games
         if (msg.content === commands.games.getWins.value)
@@ -196,6 +199,28 @@ async function getGameWins(msg) {
         msg.reply(formatMsg(response));
     
 }
+/*
+async function addGame(msg, gameName) {
+    if (msg == undefined) {
+        return;
+    }
+    if (!msg.member.roles.cache.some(r => r.name === "mods")) {
+        throw 'You must be a mod to do this. Get REKT m8'
+    }
+    if (game.lengh < 1) {
+        throw `Must specific a game in command ${commands.games.addGame.value} {game}`;
+    }
+    if (await checkIfGameExists(game)) {
+        var response = `${game} already exists`;
+        msg.reply(response);
+        return;
+    }
+    await login();
+    console.log(`Adding a new game to the list: ${game}`);
+    var game = await getGame(gameName);
+    console.log(game);
+}
+*/
 //#endregion
 
 //#region user
@@ -470,6 +495,40 @@ async function getUserId(username) {
     }
     return response;
 }
+/*
+async function getGame(gameName) {
+    await login();
+    var url = buildUrl(settings.endpoints.game.getGame
+        .replace('{gameName}', gameName));
+    console.log(`Getting game: ${gameName}. Sending request to ${url}`);
+    var response = await request({ 
+        uri: url,
+        json: true
+    });
+    console.log(response);
+    // check if error
+    if (response == undefined || response.status != 'OK') {
+        var error = `Unable to find game: ${gameName}`;
+        console.log(error);
+        console.log(response);
+        throw error;
+    }
+    // check if user exists
+    if (response.data == undefined) {
+        console.log(response);
+        throw 'Error getting game';
+    }  
+    var gameData = JSON.parse(response.data);
+    console.log(gameData);
+    var response;
+    /*
+    if (!exists) {
+        throw `Error getting user ${username}`;
+    }
+
+    return response;
+}
+*/
 
 async function getUserInfo(username) {
     var url = buildUrl(
@@ -508,6 +567,18 @@ async function checkIfUserExists(username) {
     });
     return exists;
 }
+
+/*
+async function checkIfGameExists(gameName) {
+    var exists = false;
+    await data.games.list.forEach(game => {
+        if (game.name == gameName) {
+            exists = true;
+        }
+    });
+    return exists;
+}
+*/
 
 async function saveData() {
     try {

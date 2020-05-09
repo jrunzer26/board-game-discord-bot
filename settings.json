@@ -16,7 +16,7 @@
             "getUserInfo": "?d0&list=HeadSpieler&get=list&uname={username}"
         },
         "game" : {
-            "getId": ""      
+            "getGame": "?list=HeadSpiel&get=list&game={gameName}"      
         }
     },
     "dataPath": "./data.json"
